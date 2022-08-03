@@ -1,5 +1,4 @@
 import { GHBlobStorageConnection } from "./GHBlobStorageConnection"
-import { Octokit } from "@octokit/rest";
 
 const db = new GHBlobStorageConnection({
   owner: 'kozr',
@@ -7,7 +6,7 @@ const db = new GHBlobStorageConnection({
   personalAccessToken: process.env.GITHUB_ACCESS_TOKEN as string
 });
 
-db.uploadObject('test.txt', 'test').catch((e) => {
+db.removeObject('tessdasdat.txt').catch((e) => {
   debugger
 }).then((e) => {
   debugger
