@@ -1,4 +1,8 @@
 .env
 .out
+node_module
 node_module/
+node_module/*
+lib/*
 lib/
+lib
