@@ -148,7 +148,7 @@ export class GHStorage {
         owner: this.owner,
         repo: this.repo,
         path: key,
-      }).data;
+      });
     } catch (error) {
       throw error;
     }
@@ -177,7 +177,10 @@ export class GHStorage {
     try {
       await this.octokit.request(
         `PUT /repos/{owner}/{repo}/contents/{path}`,
-        this.generateUploadParams(key, value)
+        {
+          ...this.generateUploadParams(key, value),
+          message: `Added at ${new Date().getTime()}.`,
+        }
       );
     } catch (error) {
       return false;
