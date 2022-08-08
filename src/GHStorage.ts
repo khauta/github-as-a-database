@@ -1,7 +1,9 @@
 require("dotenv").config();
 import { Octokit } from "@octokit/rest";
-import { Endpoints } from "@octokit/types";
-import { HTTP_NOT_FOUND, SHA_MISSING_ERROR } from "./errorMessages";
+import { DEFAULT_COMMITTER } from "./DefaultConstants";
+import { INTERNAL_ERROR_MESSAGE, GITHUB_API_ERROR_MESSAGE, OBJECT_NOT_FOUND_MESSAGE, INVALID_KEY_MESSAGE } from "./ErrorMessages";
+import { convertBase64ToString, convertStringToBase64, isGithubApiError, validStorageKey } from "./helpers/GHStorageHelpers"
+import { OctokitGetEndpoint, OctokitGetEndpointData, OctokitDeleteEndpoint } from "./types/GithubTypes";
 
 interface Committer {
   name: string;
@@ -15,28 +17,9 @@ interface Configuration {
   committer?: Committer;
 }
 
-interface GithubError {
-  message: string;
-  documentation_url: string;
-}
-
-const isApiError = (x: any): x is GithubError => {
-  return typeof x.message === "string";
-};
-
-const DEFAULT_COMMITTER = {
-  name: "Monalisa Octocat",
-  email: "octocat@github.com",
-};
-
-type OctokitGetEndpoint =
-  Endpoints["GET /repos/{owner}/{repo}/contents/{path}"];
-type OctokitGetEndpointData =
-  Endpoints["GET /repos/{owner}/{repo}/contents/{path}"]['response']['data'];
-type OctokitDeleteEndpoint =
-  Endpoints["DELETE /repos/{owner}/{repo}/contents/{path}"];
-
 export class GHStorage {
+  private readonly MAX_API_ATTEMPTS = 5
+
   private owner: string;
   private repo: string;
   private octokit: Octokit;
@@ -51,70 +34,74 @@ export class GHStorage {
     this.committer = args.committer || DEFAULT_COMMITTER;
   }
 
-  public async putObject(key: string, value: string): Promise<boolean> {
+  public async putObject(key: string, value: string) {
+    let success = false
+    let remainingAttempts = this.MAX_API_ATTEMPTS
     // Sanitize key and value
-    this.validateKey(key);
-    try {
-      // If this response fails with 404, means that the object does not exist yet.
-      const getResponse: OctokitGetEndpoint["response"] = await this.getObjectOctokit(key);
-      const { sha } = getResponse.data as OctokitGetEndpointData
+    if (!validStorageKey(key)) return Promise.reject(INVALID_KEY_MESSAGE);
+    while (!success && remainingAttempts > 0) {
+      try {
+        // If this response fails with 404, means that the object does not exist yet.
+        const getResponse: OctokitGetEndpoint["response"] = await this.getObjectOctokit(key);
+        const { sha } = getResponse.data as OctokitGetEndpointData
+  
+        // If sha exists, that means the object exists.
+        if (sha) this.replaceObjectOctokit(key, value, sha);
+        success = true
+      } catch (error) {
+        if (!isGithubApiError(error)) return Promise.reject(INTERNAL_ERROR_MESSAGE);
 
-      // If sha exists, that means the object exists.
-      if (sha) return this.replaceObjectOctokit(key, value, sha);
-
-      return Promise.reject("Unknown error occurred");
-    } catch (error) {
-      if (!isApiError(error)) return Promise.reject("Unknown error occured");
-
-      const { message } = error;
-      if (message === SHA_MISSING_ERROR) {
-        return Promise.reject("Not able to update at this time");
-      } else if (message === HTTP_NOT_FOUND) {
-        return this.uploadNewObjectOctokit(key, value);
+        const { status } = error;
+        if (status === 404) {
+          this.uploadNewObjectOctokit(key, value);
+          success = true
+        }
       }
-
-      return Promise.reject("Error occurred");
     }
+    if (!success) return Promise.reject("Error occurred");
   }
 
-  public async removeObject(key: string): Promise<string | null> {
-    try {
-      const getResponse: OctokitGetEndpoint["response"] = await this.getObjectOctokit(key);
-      const { sha, content } = getResponse.data as any;
+  public async removeObject(key: string): Promise<string | undefined> {
+    let success = false
+    let remainingAttempts = this.MAX_API_ATTEMPTS
+    // Sanitize key and value
+    if (!validStorageKey(key)) return Promise.reject(INVALID_KEY_MESSAGE);
+    while (!success && remainingAttempts > 0) {
+      try {
+        const getResponse: OctokitGetEndpoint["response"] = await this.getObjectOctokit(key);
+        const { sha, content } = getResponse.data as OctokitGetEndpointData;
 
-      // It's okay if it has already been deleted/ unable to find it
-      if (!sha) return null;
+        await this.deleteObjectOctokit(key, sha);
+        return content;
+      } catch (error) {
+        if (!isGithubApiError(error)) return Promise.reject(INTERNAL_ERROR_MESSAGE);
 
-      await this.deleteObjectOctokit(key, sha);
-      return content;
-    } catch (error) {
-      if (!isApiError(error)) return Promise.reject("Unknown error occured");
-
-      const { message } = error;
-      if (message === HTTP_NOT_FOUND) {
-        return null;
+        const { status, message } = error;
+        if (status === 404) success = true
+        else return Promise.reject(message)
       }
-      // Be more precise and throw errors
-      return Promise.reject("Error occurred");
     }
+    return Promise.reject(GITHUB_API_ERROR_MESSAGE);
   }
 
+  // TODO: Check types and encoding
+  // https://docs.github.com/en/rest/repos/contents
   public async getObject(key: string): Promise<string> {
+    // Sanitize key and value
+    if (!validStorageKey(key)) return Promise.reject(INVALID_KEY_MESSAGE);
     try {
       const getResponse: OctokitGetEndpoint["response"] = await this.getObjectOctokit(key);
-      const { content } = getResponse.data as any;
+      const { content } = getResponse.data as OctokitGetEndpointData;
 
-      return this.convertBase64ToString(content);
+      if (content) return convertBase64ToString(content);
     } catch (error) {
-      if (!isApiError(error)) return Promise.reject("Unknown error occured");
+      if (!isGithubApiError(error)) return Promise.reject(INTERNAL_ERROR_MESSAGE);
 
-      const { message } = error;
-      if (message === HTTP_NOT_FOUND) {
-        return Promise.reject("Object not found");
-      }
-      // Be more precise and throw errors
-      return Promise.reject("Error occurred");
+      const { status } = error;
+      if (status === 404) return Promise.reject(OBJECT_NOT_FOUND_MESSAGE);
     }
+    // Be more precise and throw errors
+    return Promise.reject(GITHUB_API_ERROR_MESSAGE);
   }
 
   private async deleteObjectOctokit(
@@ -188,22 +175,6 @@ export class GHStorage {
     return true;
   }
 
-  private validateKey(key: string): boolean {
-    // Is this greedy?
-    const pathRegEx = /^(\/?[\w-]+)+(\.\w+)?$/;
-    if (!pathRegEx.test(key))
-      throw new Error("Bad key, please make sure it is a valid path.");
-    return true;
-  }
-
-  private convertStringToBase64(value: string): string {
-    return Buffer.from(value).toString("base64");
-  }
-
-  private convertBase64ToString(value: string): string {
-    return Buffer.from(value, "base64").toString("ascii");
-  }
-
   private generateUploadParams(path: string, value: string): any {
     return {
       owner: this.owner,
@@ -213,7 +184,7 @@ export class GHStorage {
       ...(this.committer && {
         committer: this.committer,
       }),
-      content: this.convertStringToBase64(value),
+      content: convertStringToBase64(value),
     };
   }
 }

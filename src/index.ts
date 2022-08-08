@@ -6,7 +6,7 @@ const db = new GHStorage({
   personalAccessToken: process.env.GITHUB_ACCESS_TOKEN as string,
 });
 
-db.putObject("test.txt", "original word")
+db.putObject("testbb.txt", "original word")
   .then((e) => {
     db.putObject("test.txt", "replaced word")
       .then((e) => {
