@@ -1,7 +1,7 @@
 require("dotenv").config();
 import { Octokit } from "@octokit/rest";
-import { DEFAULT_COMMITTER } from "./DefaultConstants";
-import { INTERNAL_ERROR_MESSAGE, GITHUB_API_ERROR_MESSAGE, OBJECT_NOT_FOUND_MESSAGE, INVALID_KEY_MESSAGE } from "./ErrorMessages";
+import { DEFAULT_COMMITTER } from "./constants/DefaultConstants";
+import { INTERNAL_ERROR_MESSAGE, GITHUB_API_ERROR_MESSAGE, OBJECT_NOT_FOUND_MESSAGE, INVALID_KEY_MESSAGE } from "./constants/ErrorMessages";
 import { convertBase64ToString, convertStringToBase64, isGithubApiError, validStorageKey } from "./helpers/GHStorageHelpers"
 import { OctokitGetEndpoint, OctokitGetEndpointData, OctokitDeleteEndpoint } from "./types/GithubTypes";
 
