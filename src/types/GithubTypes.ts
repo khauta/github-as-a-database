@@ -7,6 +7,7 @@ export type OctokitGetEndpoint = Endpoints['GET /repos/{owner}/{repo}/contents/{
 
 export type OctokitGetEndpointData = {
   type: string;
+  encoding: string;
   size: number;
   name: string;
   path: string;
