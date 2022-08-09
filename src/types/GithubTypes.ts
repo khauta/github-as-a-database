@@ -1,6 +1,6 @@
-import { Endpoints } from "@octokit/types";
+import { Endpoints } from '@octokit/types';
 
-export type OctokitGetEndpoint = Endpoints["GET /repos/{owner}/{repo}/contents/{path}"];
+export type OctokitGetEndpoint = Endpoints['GET /repos/{owner}/{repo}/contents/{path}'];
 
 // type OctokitGetEndpointData =
 //   Endpoints["GET /repos/{owner}/{repo}/contents/{path}"]['response']['data'];
@@ -15,4 +15,4 @@ export type OctokitGetEndpointData = {
   url: string;
 };
 
-export type OctokitDeleteEndpoint = Endpoints["DELETE /repos/{owner}/{repo}/contents/{path}"];
+export type OctokitDeleteEndpoint = Endpoints['DELETE /repos/{owner}/{repo}/contents/{path}'];
