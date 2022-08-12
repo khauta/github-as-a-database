@@ -13,7 +13,7 @@ import {
   convertStringToBase64,
   isGithubApiError,
   validStorageKey,
-} from './helpers/GHStorageHelpers';
+} from './helpers/GHClientHelpers';
 import { OctokitGetEndpoint, OctokitGetEndpointData, OctokitDeleteEndpoint } from './types/GithubTypes';
 
 interface Committer {
@@ -28,7 +28,7 @@ interface Configuration {
   committer?: Committer;
 }
 
-export class GHStorage {
+export class GHClient {
   private readonly MAX_API_ATTEMPTS = 10;
 
   private owner: string;
@@ -57,7 +57,9 @@ export class GHStorage {
         const { sha } = getResponse.data as OctokitGetEndpointData;
 
         // If sha exists, that means the object exists.
-        if (sha) this.replaceObjectOctokit(key, value, sha);
+        // Otherwise if sha is undefined but call succeeded, it means it's a folder
+        if (sha) await this.replaceObjectOctokit(key, value, sha);
+        else if (Array.isArray(getResponse.data)) return Promise.reject('Cannot replace value of a folder');
         success = true;
       } catch (error) {
         if (!isGithubApiError(error)) return Promise.reject(INTERNAL_ERROR_MESSAGE);
@@ -107,6 +109,8 @@ export class GHStorage {
       const getResponse: OctokitGetEndpoint['response'] = await this.getObjectOctokit(key);
       const { content } = getResponse.data as OctokitGetEndpointData;
 
+      if (Array.isArray(getResponse.data)) return Promise.reject('Key points to a folder');
+
       if (content) return convertBase64ToString(content);
     } catch (error) {
       if (!isGithubApiError(error)) return Promise.reject(INTERNAL_ERROR_MESSAGE);
@@ -117,6 +121,12 @@ export class GHStorage {
     }
     // Be more precise and throw errors
     return Promise.reject(GITHUB_API_ERROR_MESSAGE);
+  }
+
+  public async listObjects(key: string): Promise<OctokitGetEndpointData[]> {
+    const { data } = await this.listObjectsOctokit(key);
+    if (!Array.isArray(data)) return Promise.reject('Not a folder');
+    return data;
   }
 
   private async deleteObjectOctokit(key: string, sha: string): Promise<OctokitDeleteEndpoint['response']> {
@@ -146,6 +156,10 @@ export class GHStorage {
     } catch (error) {
       throw error;
     }
+  }
+
+  private async listObjectsOctokit(key: string): Promise<OctokitGetEndpoint['response']> {
+    return this.getObjectOctokit(key);
   }
 
   private async replaceObjectOctokit(key: string, value: string, sha: string): Promise<boolean> {
