@@ -6,7 +6,7 @@ const db = new GHClient({
   personalAccessToken: process.env.GITHUB_ACCESS_TOKEN as string,
 });
 
-db.listObjects('testfolder').then(e => {
+db.listObjects('test').then(e => {
   debugger
 }).catch(e => {
   debugger

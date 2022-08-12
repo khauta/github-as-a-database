@@ -87,6 +87,7 @@ export class GHClient {
         const { sha, content } = getResponse.data as OctokitGetEndpointData;
 
         await this.deleteObjectOctokit(key, sha);
+        // clean up if directory is empty
         return content;
       } catch (error) {
         if (!isGithubApiError(error)) return Promise.reject(INTERNAL_ERROR_MESSAGE);
@@ -134,7 +135,7 @@ export class GHClient {
       return this.octokit.request(`DELETE /repos/{owner}/{repo}/contents/{path}`, {
         owner: this.owner,
         repo: this.repo,
-        path: key,
+        path: `${key}/.data`,
         sha: sha,
         ...(this.committer && {
           committer: this.committer,
@@ -151,7 +152,7 @@ export class GHClient {
       return this.octokit.request(`GET /repos/{owner}/{repo}/contents/{path}`, {
         owner: this.owner,
         repo: this.repo,
-        path: key,
+        path: `${key}/.data`,
       });
     } catch (error) {
       throw error;
@@ -159,7 +160,15 @@ export class GHClient {
   }
 
   private async listObjectsOctokit(key: string): Promise<OctokitGetEndpoint['response']> {
-    return this.getObjectOctokit(key);
+    try {
+      return this.octokit.request(`GET /repos/{owner}/{repo}/contents/{path}`, {
+        owner: this.owner,
+        repo: this.repo,
+        path: key,
+      });
+    } catch (error) {
+      throw error;
+    }
   }
 
   private async replaceObjectOctokit(key: string, value: string, sha: string): Promise<boolean> {
@@ -186,11 +195,11 @@ export class GHClient {
     return true;
   }
 
-  private generateUploadParams(path: string, value: string): any {
+  private generateUploadParams(key: string, value: string): any {
     return {
       owner: this.owner,
       repo: this.repo,
-      path: path,
+      path: `${key}/.data`,
       message: `Update made at ${new Date().getTime()}.`,
       ...(this.committer && {
         committer: this.committer,
