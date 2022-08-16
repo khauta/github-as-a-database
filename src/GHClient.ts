@@ -1,7 +1,7 @@
 require('dotenv').config();
 import { Octokit } from '@octokit/rest';
 import { BAD_CREDENTIALS_MESSAGE } from './constants/ErrorMessages';
-import { DEFAULT_COMMITTER } from './constants/DefaultConstants';
+import { DEFAULT_COMMITTER, RESERVED_FILE_KEY } from './constants/Defaults';
 import {
   INTERNAL_ERROR_MESSAGE,
   GITHUB_API_ERROR_MESSAGE,
@@ -27,7 +27,6 @@ interface Configuration {
   personalAccessToken: string;
   committer?: Committer;
 }
-
 export class GHClient {
   private readonly MAX_API_ATTEMPTS = 10;
 
@@ -101,8 +100,6 @@ export class GHClient {
     return Promise.reject(GITHUB_API_ERROR_MESSAGE);
   }
 
-  // TODO: Check types and encoding
-  // https://docs.github.com/en/rest/repos/contents
   public async getObject(key: string): Promise<string> {
     // Sanitize key and value
     if (!validStorageKey(key)) return Promise.reject(INVALID_KEY_MESSAGE);
@@ -120,14 +117,13 @@ export class GHClient {
       if (status === 404) return Promise.reject(OBJECT_NOT_FOUND_MESSAGE);
       else if (status === 401) return Promise.reject(BAD_CREDENTIALS_MESSAGE);
     }
-    // Be more precise and throw errors
     return Promise.reject(GITHUB_API_ERROR_MESSAGE);
   }
 
   public async listObjects(key: string): Promise<OctokitGetEndpointData[]> {
     const { data } = await this.listObjectsOctokit(key);
     if (!Array.isArray(data)) return Promise.reject('Not a folder');
-    return data;
+    return data.filter((object) => object.name !== RESERVED_FILE_KEY)
   }
 
   private async deleteObjectOctokit(key: string, sha: string): Promise<OctokitDeleteEndpoint['response']> {
@@ -135,7 +131,7 @@ export class GHClient {
       return this.octokit.request(`DELETE /repos/{owner}/{repo}/contents/{path}`, {
         owner: this.owner,
         repo: this.repo,
-        path: `${key}/.data`,
+        path: `${key}/${RESERVED_FILE_KEY}`,
         sha: sha,
         ...(this.committer && {
           committer: this.committer,
@@ -152,7 +148,7 @@ export class GHClient {
       return this.octokit.request(`GET /repos/{owner}/{repo}/contents/{path}`, {
         owner: this.owner,
         repo: this.repo,
-        path: `${key}/.data`,
+        path: `${key}/${RESERVED_FILE_KEY}`,
       });
     } catch (error) {
       throw error;
@@ -199,7 +195,7 @@ export class GHClient {
     return {
       owner: this.owner,
       repo: this.repo,
-      path: `${key}/.data`,
+      path: `${key}/${RESERVED_FILE_KEY}`,
       message: `Update made at ${new Date().getTime()}.`,
       ...(this.committer && {
         committer: this.committer,
