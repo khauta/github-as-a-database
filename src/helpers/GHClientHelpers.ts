@@ -5,13 +5,6 @@ export const isGithubApiError = (x: any): x is GithubError => {
   return typeof x.status === 'number';
 };
 
-export const validStorageKey = (key: string): boolean => {
-  // Is this greedy?
-  if (key === RESERVED_FILE_KEY) return false
-  const pathRegEx = /^(\/?[\w-]+)+(\.\w+)?$/;
-  return pathRegEx.test(key);
-};
-
 export const convertStringToBase64 = (value: string): string => {
   return Buffer.from(value).toString('base64');
 };
