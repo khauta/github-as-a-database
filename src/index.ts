@@ -6,33 +6,8 @@ const db = new GHClient({
   personalAccessToken: process.env.GITHUB_ACCESS_TOKEN as string,
 });
 
-// db.listObjects('test').then(e => {
-//   debugger
-// }).catch(e => {
-//   debugger
-// })
-db.putObject('testbb.txt', 'original word')
-  .then((e) => {
-    db.putObject('test.txt', 'replaced word')
-      .then((e) => {
-        db.getObject('test.txt')
-          .then((e) => {
-            debugger;
-            if (e !== 'replaced word') Promise.reject('Update did not work');
-            db.removeObject('test.txt')
-              .then((e) => {})
-              .catch((e) => {
-                debugger;
-              });
-          })
-          .catch((e) => {
-            debugger;
-          });
-      })
-      .catch((e) => {
-        debugger;
-      });
-  })
-  .catch((e) => {
-    debugger;
-  });
+db.putObject('demo', 'demo text').then(e => {
+  return db.removeObject('demo')
+}).catch(e => {
+  debugger
+})
