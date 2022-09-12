@@ -1,13 +1,8 @@
+import { RESERVED_FILE_KEY } from '../constants/Defaults';
 import { GithubError } from '../types/ErrorTypes';
 
 export const isGithubApiError = (x: any): x is GithubError => {
   return typeof x.status === 'number';
-};
-
-export const validStorageKey = (key: string): boolean => {
-  // Is this greedy?
-  const pathRegEx = /^(\/?[\w-]+)+(\.\w+)?$/;
-  return pathRegEx.test(key);
 };
 
 export const convertStringToBase64 = (value: string): string => {
@@ -17,3 +12,7 @@ export const convertStringToBase64 = (value: string): string => {
 export const convertBase64ToString = (value: string): string => {
   return Buffer.from(value, 'base64').toString('ascii');
 };
+
+export const sleep = (ms: number): Promise<NodeJS.Timeout> => {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
