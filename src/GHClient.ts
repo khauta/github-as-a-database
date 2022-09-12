@@ -93,6 +93,7 @@ export class GHClient {
         else return Promise.reject(message);
       }
     }
+    if (success) return undefined;
     return Promise.reject(UNKNOWN_ERROR);
   }
 
@@ -121,7 +122,6 @@ export class GHClient {
     if (!Array.isArray(data)) return Promise.reject('Not a folder');
     const pathPrefix = key.endsWith('*') ? key.substring(0, key.length - 1) : '';
     const filteredData = this.applyListFilter(data, pathPrefix);
-    debugger
     return filteredData;
   }
 
@@ -169,7 +169,6 @@ export class GHClient {
   private async listObjectsOctokit(key: string): Promise<OctokitGetEndpoint['response']> {
     try {
       const correctedKey = this.correctListKeyForGitHub(key);
-      debugger
       return this.octokit.request(`GET /repos/{owner}/{repo}/contents/{path}`, {
         owner: this.owner,
         repo: this.repo,
