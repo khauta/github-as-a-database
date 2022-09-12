@@ -1,9 +1,7 @@
 require('dotenv').config();
 import { Octokit } from '@octokit/rest';
-import path = require('path');
 import { DEFAULT_COMMITTER, RESERVED_FILE_KEY } from './constants/Defaults';
 import {
-  INTERNAL_ERROR_MESSAGE,
   UNKNOWN_ERROR,
   OBJECT_NOT_FOUND_MESSAGE,
   INVALID_KEY_MESSAGE,
@@ -40,11 +38,11 @@ export class GHClient {
     this.committer = args.committer || DEFAULT_COMMITTER;
   }
 
-  public async putObject(key: string, value: string) {
+  public async putObject(key: string, value: string): Promise<void> {
     let success = false;
     let remainingAttempts = this.MAX_API_ATTEMPTS;
     // Sanitize key and value
-    if (!this.validStorageKey(key)) return Promise.reject(INVALID_KEY_MESSAGE);
+    if (!this.validStorageKey(key)) throw new Error(INVALID_KEY_MESSAGE);
     while (!success && remainingAttempts > 0) {
       try {
         // If this response fails with 404, means that the object does not exist yet.
@@ -54,72 +52,71 @@ export class GHClient {
         // If sha exists, that means the object exists.
         // Otherwise if sha is undefined but call succeeded, it means it's a folder
         if (sha) await this.replaceObjectOctokit(key, value, sha);
-        else if (Array.isArray(getResponse.data)) return Promise.reject('Cannot replace value of a folder');
+        else if (Array.isArray(getResponse.data)) throw new Error('Cannot replace value of a folder');
         success = true;
       } catch (error) {
-        if (!isGithubApiError(error)) return Promise.reject(UNKNOWN_ERROR);
+        if (!isGithubApiError(error)) throw new Error(UNKNOWN_ERROR);
 
         const { status } = error;
         if (status === 404) {
           this.uploadNewObjectOctokit(key, value);
           success = true;
         } else if (status === 401) {
-          return Promise.reject(BAD_CREDENTIALS_MESSAGE);
+          throw new Error(BAD_CREDENTIALS_MESSAGE);
         }
       }
     }
-    if (!success) return Promise.reject(UNKNOWN_ERROR);
+    if (!success) throw new Error(UNKNOWN_ERROR);
   }
 
-  public async removeObject(key: string): Promise<string | undefined> {
+  public async removeObject(key: string): Promise<void> {
     let success = false;
     let remainingAttempts = this.MAX_API_ATTEMPTS;
     // Sanitize key and value
-    if (!this.validStorageKey(key)) return Promise.reject(INVALID_KEY_MESSAGE);
+    if (!this.validStorageKey(key)) throw new Error(INVALID_KEY_MESSAGE);
     while (!success && remainingAttempts > 0) {
       try {
         const getResponse: OctokitGetEndpoint['response'] = await this.getObjectOctokit(key);
-        const { sha, content } = getResponse.data as OctokitGetEndpointData;
+        const { sha } = getResponse.data as OctokitGetEndpointData;
         await this.deleteObjectOctokit(key, sha);
-        // clean up if directory is empty
-        return content;
+        success = true;
       } catch (error) {
-        if (!isGithubApiError(error)) return Promise.reject(UNKNOWN_ERROR);
+        if (!isGithubApiError(error)) throw new Error(UNKNOWN_ERROR);
 
         const { status, message } = error;
         if (status === 404) success = true;
         else if (status === 409) continue;
-        else if (status === 401) return Promise.reject(BAD_CREDENTIALS_MESSAGE);
-        else return Promise.reject(message);
+        else if (status === 401) throw new Error(BAD_CREDENTIALS_MESSAGE);
+        else throw new Error(message);
       }
     }
-    if (success) return undefined;
-    return Promise.reject(UNKNOWN_ERROR);
+    if (success) return;
+    throw new Error(UNKNOWN_ERROR);
   }
 
   public async getObject(key: string): Promise<string> {
     // Sanitize key and value
-    if (!this.validStorageKey(key)) return Promise.reject(INVALID_KEY_MESSAGE);
+    if (!this.validStorageKey(key)) throw new Error(INVALID_KEY_MESSAGE);
     try {
       const getResponse: OctokitGetEndpoint['response'] = await this.getObjectOctokit(key);
       const { content } = getResponse.data as OctokitGetEndpointData;
 
-      if (Array.isArray(getResponse.data)) return Promise.reject('Key points to a folder');
+      if (Array.isArray(getResponse.data)) throw new Error('Key points to a folder');
 
       if (content) return convertBase64ToString(content);
     } catch (error) {
-      if (!isGithubApiError(error)) return Promise.reject(UNKNOWN_ERROR);
+      if (!isGithubApiError(error)) throw new Error(UNKNOWN_ERROR);
 
       const { status } = error;
-      if (status === 404) return Promise.reject(OBJECT_NOT_FOUND_MESSAGE);
-      else if (status === 401) return Promise.reject(BAD_CREDENTIALS_MESSAGE);
+      if (status === 404) throw new Error(OBJECT_NOT_FOUND_MESSAGE);
+      else if (status === 401) throw new Error(BAD_CREDENTIALS_MESSAGE);
     }
-    return Promise.reject(UNKNOWN_ERROR);
+    throw new Error(UNKNOWN_ERROR);
   }
 
   public async listObjects(key: string): Promise<OctokitGetEndpointData[]> {
     const { data } = await this.listObjectsOctokit(key);
-    if (!Array.isArray(data)) return Promise.reject('Not a folder');
+    if (!Array.isArray(data)) throw new Error('Not a folder');
     const pathPrefix = key.endsWith('*') ? key.substring(0, key.length - 1) : '';
     const filteredData = this.applyListFilter(data, pathPrefix);
     return filteredData;
