@@ -79,19 +79,26 @@ export class GHClient {
         const getResponse: OctokitGetEndpoint['response'] = await this.getObjectOctokit(key);
         const { sha } = getResponse.data as OctokitGetEndpointData;
         await this.deleteObjectOctokit(key, sha);
+
         success = true;
       } catch (error) {
         if (!isGithubApiError(error)) throw new Error(UNKNOWN_ERROR);
 
         const { status, message } = error;
-        if (status === 404) success = true;
-        else if (status === 409) continue;
-        else if (status === 401) throw new Error(BAD_CREDENTIALS_MESSAGE);
-        else throw new Error(message);
+        switch (status) {
+          case 404:
+            success = true;
+            break;
+          case 401:
+            throw new Error(BAD_CREDENTIALS_MESSAGE);
+          case 409:
+            continue;
+          default:
+            throw new Error(message);
+        }
       }
     }
-    if (success) return;
-    throw new Error(UNKNOWN_ERROR);
+    if (!success) throw new Error(UNKNOWN_ERROR);
   }
 
   public async getObject(key: string): Promise<string> {
@@ -108,8 +115,14 @@ export class GHClient {
       if (!isGithubApiError(error)) throw new Error(UNKNOWN_ERROR);
 
       const { status } = error;
-      if (status === 404) throw new Error(OBJECT_NOT_FOUND_MESSAGE);
-      else if (status === 401) throw new Error(BAD_CREDENTIALS_MESSAGE);
+      switch (status) {
+        case 404:
+          throw new Error(OBJECT_NOT_FOUND_MESSAGE);
+        case 401:
+          throw new Error(BAD_CREDENTIALS_MESSAGE);
+        default:
+          throw new Error(UNKNOWN_ERROR);
+      }
     }
     throw new Error(UNKNOWN_ERROR);
   }
@@ -135,45 +148,33 @@ export class GHClient {
   }
 
   private async deleteObjectOctokit(key: string, sha: string): Promise<OctokitDeleteEndpoint['response']> {
-    try {
-      return this.octokit.request(`DELETE /repos/{owner}/{repo}/contents/{path}`, {
-        owner: this.owner,
-        repo: this.repo,
-        path: `${key}/${RESERVED_FILE_KEY}`,
-        sha: sha,
-        ...(this.committer && {
-          committer: this.committer,
-        }),
-        message: `Delete made at ${new Date().getTime()}.`,
-      });
-    } catch (error) {
-      throw error;
-    }
+    return this.octokit.request(`DELETE /repos/{owner}/{repo}/contents/{path}`, {
+      owner: this.owner,
+      repo: this.repo,
+      path: `${key}/${RESERVED_FILE_KEY}`,
+      sha: sha,
+      ...(this.committer && {
+        committer: this.committer,
+      }),
+      message: `Delete made at ${new Date().getTime()}.`,
+    });
   }
 
   private async getObjectOctokit(key: string): Promise<OctokitGetEndpoint['response']> {
-    try {
-      return this.octokit.request(`GET /repos/{owner}/{repo}/contents/{path}`, {
-        owner: this.owner,
-        repo: this.repo,
-        path: `${key}/${RESERVED_FILE_KEY}`,
-      });
-    } catch (error) {
-      throw error;
-    }
+    return this.octokit.request(`GET /repos/{owner}/{repo}/contents/{path}`, {
+      owner: this.owner,
+      repo: this.repo,
+      path: `${key}/${RESERVED_FILE_KEY}`,
+    });
   }
 
   private async listObjectsOctokit(key: string): Promise<OctokitGetEndpoint['response']> {
-    try {
-      const correctedKey = this.correctListKeyForGitHub(key);
-      return this.octokit.request(`GET /repos/{owner}/{repo}/contents/{path}`, {
-        owner: this.owner,
-        repo: this.repo,
-        path: correctedKey,
-      });
-    } catch (error) {
-      throw error;
-    }
+    const correctedKey = this.correctListKeyForGitHub(key);
+    return this.octokit.request(`GET /repos/{owner}/{repo}/contents/{path}`, {
+      owner: this.owner,
+      repo: this.repo,
+      path: correctedKey,
+    });
   }
 
   // The sdk doesn't like '/' and encodes it into '%2F' in the URL
